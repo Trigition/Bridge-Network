@@ -80,7 +80,7 @@ public class TokenRing {
 	 * This method runs the ring by starting each node sequentially
 	 */
 	public void runRing() {
-		//System.out.print(this.numberNodes + " " + this.globalTHT + " " + this.globalTimeOut + " ");
+		System.out.print(this.numberNodes + " " + this.globalTHT + " " + this.globalTimeOut + " ");
 		for (Thread thread : ringThreads) {
 			thread.start();
 		}

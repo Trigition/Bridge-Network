@@ -87,7 +87,7 @@ public class RelayNode extends Node implements Runnable {
 	 * This method represents the Listen state of the Node.
 	 * @return Returns 0 upon reception of a Token Frame, or 1 upon Kill Signal Reception
 	 */
-	public int Listen() {
+	public STPLPFrame Listen() {
 		STPLPFrame inputFrame;
 		while(true) {
 			//Read from input socket a new frame
@@ -107,6 +107,7 @@ public class RelayNode extends Node implements Runnable {
 			//data size caused this node to be unable to differentiate
 			//when a new frame started
 			if (!MonitorNode.isFrameHealthy(inputFrame)) {
+				System.out.println("Node " + this.getNodeID() + " found an unhealthy frame!");
 				writeToSocket(inputFrame);
 				continue;
 			}
@@ -114,13 +115,7 @@ public class RelayNode extends Node implements Runnable {
 			if (inputFrame.getFrameStatus() == 4) {
 				//Kill Network Signal has been received
 				writeToSocket(inputFrame); //Pass Kill Signal
-				return 1;
-			}
-			
-			//Check to see if Frame is Completion Signal
-			if (inputFrame.getFrameStatus() == 5) {
-				writeToSocket(inputFrame);
-				continue;
+				return null;
 			}
 			
 			//If Frame was intended for this Node
@@ -130,6 +125,8 @@ public class RelayNode extends Node implements Runnable {
 				//Determine if frame needs to be rejected or received
 				if(inputFrame.getFrameStatus() == 3) {
 					//Reject Frame
+					System.out.println("Node " + this.getNodeID() + " Rejecting Frame...");
+					inputFrame.zeroMonitorBit();
 					writeToSocket(inputFrame);
 					continue;
 				} else if (inputFrame.getFrameStatus() == 2) {
@@ -137,6 +134,7 @@ public class RelayNode extends Node implements Runnable {
 							"," + inputFrame.getDestinationAddress() + 
 							"," + inputFrame.getDataSize() + 
 							"," + inputFrame.dataToString());
+					inputFrame.zeroMonitorBit();
 					writeToSocket(inputFrame); //Pass Frame to return back to Sender
 				}
 			}
@@ -153,7 +151,7 @@ public class RelayNode extends Node implements Runnable {
 				//Check to see if Frame was accepted
 				if (inputFrame.getFrameStatus() == 2) {
 					Random rand = new Random();
-						if (rand.nextInt(100) < 2) {
+						if (rand.nextInt(100) < 0) {
 							writeToSocket(inputFrame); //Create Orphan Frame
 						}
 					continue;
@@ -162,7 +160,7 @@ public class RelayNode extends Node implements Runnable {
 			}		
 			//Check if Frame is Token
 			if(inputFrame.isToken()) {
-				return 0; //Go to Transmit State
+				return inputFrame; //Go to Transmit State
 			}
 			writeToSocket(inputFrame);
 		}
@@ -173,7 +171,7 @@ public class RelayNode extends Node implements Runnable {
 	 * while the Node has a the token and has not gone beyond the total THT.
 	 * @return Returns 0 when THT has been depleted, or 1 when there is no more data to transmit
 	 */
-	public int Transmit(){
+	public int Transmit(STPLPFrame token){
 		int currentTHT = 0;
 		STPLPFrame currentFrame;
 		String buffer = null;
@@ -197,11 +195,14 @@ public class RelayNode extends Node implements Runnable {
 						//Node has successfully transmitted all of its OWN data
 						if (this.hasSentComplete == false && this.waitingFrames.isEmpty()) {
 							//Notify monitor of completion
-							writeToSocket(STPLPFrame.generateCompletedSig((byte) this.getNodeID()));
+							//writeToSocket(STPLPFrame.generateCompletedSig((byte) this.getNodeID()));
 							this.hasSentComplete = true;
 						}
 						//No longer needs to transmit
-						writeToSocket(STPLPFrame.generateToken());
+						if (!this.waitingFrames.isEmpty())
+							token.setFinishedBit();
+						//System.out.println("Node " + this.getNodeID() + " passed a token (finished): FS value:......." + Integer.toBinaryString(token.getFrameStatus()));
+						writeToSocket(token);
 						return 1;
 					}
 					//Transmit the next line in input file
@@ -214,15 +215,16 @@ public class RelayNode extends Node implements Runnable {
 			} catch (IOException e) {
 				//Either no data file or no data to transmit
 				System.out.println("No data to transmit");
-				writeToSocket(STPLPFrame.generateCompletedSig((byte) this.getNodeID()));
 				writeToSocket(STPLPFrame.generateToken()); //Pass the Token
 				return 1;
 			}
 		}
 		Random rand = new Random();
 		//95% Chance to successfully transmit the token
-		if (rand.nextInt(100) < 95)
-			writeToSocket(STPLPFrame.generateToken()); //Pass the Token
+		if (rand.nextInt(100) < 100) {
+			token.setFinishedBit();
+			writeToSocket(token); //Pass the Token
+		}
 //		else
 //			System.out.println("Node " + this.getNodeID() + " lost the token!");
 		return 0;
@@ -241,13 +243,15 @@ public class RelayNode extends Node implements Runnable {
 	 */
 	@Override
 	public void run() {
+		STPLPFrame token;
 		this.acceptClient();
 		if (this.getNodeID() == 1) {
 			//Node 1 generates the token and passes it to the neighboring node
 			writeToSocket(STPLPFrame.generateToken());
 		}
 		while(true) {
-			if (Listen() == 1) {
+			token = Listen();
+			if (token == null) {
 				//Kill Signal has been received
 				//System.out.println("Node: " + this.getNodeID() + " has received Kill Order 66");
 				this.closeNode();
@@ -257,7 +261,7 @@ public class RelayNode extends Node implements Runnable {
 			//Any frames that have not been ACK nor NAK are added for retransmission
 			this.frameBuffer.addAll(waitingFrames);
 			this.waitingFrames.clear();
-			Transmit();
+			Transmit(token);
 		}
 	}
 }

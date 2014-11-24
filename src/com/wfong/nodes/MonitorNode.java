@@ -27,12 +27,11 @@ public class MonitorNode extends Node implements Runnable{
 	 * @param NodeName The Node ID.
 	 * @param timeOut The time out period in milliseconds.
 	 */
-	public MonitorNode(int NodeName, int timeOutPeriod	) {
+	public MonitorNode(int NodeName, int timeOutPeriod) {
 		super(NodeName, timeOutPeriod);
 		this.myAddress = getLocalAddress();
 		this.port = this.addServerSocket(myAddress);
 		this.myNetwork = new HashMap<Integer, Integer>();
-		//System.out.println("Monitor Node Listening on Port " + this.port);
 	}
 	
 	/**
@@ -67,7 +66,7 @@ public class MonitorNode extends Node implements Runnable{
 				}
 				//Check for Orphan Frame
 				if (!inputFrame.isToken() && inputFrame.monitorBit()) {
-					//System.out.println("MONITOR NODE: Found Orphan Frame");
+					System.out.println("MONITOR NODE: Removing orphan frame.");
 					inputFrame = null; //'Drain' the frame
 					return 0;
 				} else if (!inputFrame.isToken()) {
@@ -78,21 +77,12 @@ public class MonitorNode extends Node implements Runnable{
 					return 0;
 				}
 				//Check for Transmission Completed Signals
-				if (inputFrame.getFrameStatus() == 5) {
-					//The frame's source has completed all transmission
-					System.out.println("MONITOR: " + "Node " + inputFrame.getSourceAddress() + " has no more data to send...");
-					this.myNetwork.put(inputFrame.getSourceAddress() & 0xff, 1);
-					if (areAllNodesDone()) {
-						//Send out the kill signal
-						writeToSocket(STPLPFrame.generateKillSig());
-					}
-				return 0;
+				if (inputFrame.isToken() && inputFrame.getFrameStatus() == 0) {
+					writeToSocket(STPLPFrame.generateKillSig());
+					return 0;
 				}
 				//Check for Kill Signal
 				if (inputFrame.getFrameStatus() == 4) {
-					if (!areAllNodesDone()) {
-						System.err.println("CRITICAL ERROR: Kill Signal Received: Not all Nodes Have Completed!");
-					}
 					this.closeNode();
 					return 1;
 				}
@@ -105,6 +95,7 @@ public class MonitorNode extends Node implements Runnable{
 				return 0;
 				
 				} catch (SocketTimeoutException e) {
+					System.out.println("MONITOR NODE: Timeout");
 					writeToSocket(STPLPFrame.generateToken());
 					return 0;
 				}
@@ -130,7 +121,7 @@ public class MonitorNode extends Node implements Runnable{
 			//System.out.println("FRAME Error: Incorrect Data Size");
 			return false;
 		}
-		if (frame.getFrameStatus() > 5) {
+		if (frame.getFrameStatus() > 0x40) {
 			//sSystem.out.println("FRAME Error: Incorrect Frame Status Byte");
 			return false;
 		}
@@ -148,30 +139,15 @@ public class MonitorNode extends Node implements Runnable{
 		return this.port;
 	}
 	
-	/**
-	 * This method determines if all nodes have finished their transmissions
-	 * @return True if the network has finished all transmissions
-	 */
-	private boolean areAllNodesDone() {
-		for (int nodeID : this.myNetwork.keySet()) {
-			//See if any nodes have not finished transmissions
-			if (this.myNetwork.get(nodeID) == 0) {
-				//System.out.println("\tNode " + nodeID + " has not completed signal transmission");
-				return false;
-			}
-		}
-		return true; //All nodes have finished
-	}
-	
 	@Override
 	public void run(){
-		System.out.println("Initialized Monitor Node");
-		//long simTime;
-		//simTime = System.currentTimeMillis();
+		//System.out.println("Initialized Monitor Node");
+		long simTime;
+		simTime = System.currentTimeMillis();
 		this.acceptClient();
 		while (true) {
 			if(MonitorNetwork() == 1) {
-				//System.out.println(((System.currentTimeMillis() - simTime) / 1000));
+				System.out.println(((System.currentTimeMillis() - simTime) / 1000));
 				return;
 			}
 		}

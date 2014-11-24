@@ -196,7 +196,6 @@ public class Node{
 				finalFrame[i] = buffer[i - 5];
 				}
 			}
-			//System.out.println("Node " + this.getNodeID() + ": successfully read frame");
 			frame = new STPLPFrame(finalFrame);
 		} catch(EOFException eof) {
 			//Improper Frame Detected

@@ -53,7 +53,13 @@ public class STPLPFrame {
 		this.frameValue[4] = dataSize;
 		//Copy Data
 		for (int i = 0; i < (dataSize & 0xff); i++) {
+			try {
 			this.frameValue[i + 5] = data[i];
+				}
+			catch (ArrayIndexOutOfBoundsException e) {
+				System.err.println("Could not create frame: " + frameString);
+				System.err.println("Index: " + i + " Data Size: " + (dataSize & 0xff));
+			}
 		}
 		this.frameValue[(dataSize & 0xff) + 5] = frameStatus;
 	}
@@ -96,23 +102,6 @@ public class STPLPFrame {
 		frameValue[5] = 0x0;
 		return new STPLPFrame(frameValue);
 	}
-	
-	/**
-	 * Generates a Completion Signal.
-	 * @param sourceAddress The source of the signal.
-	 * @return A new STPLP Frame.
-	 */
-	public static STPLPFrame generateCompletedSig(byte sourceAddress) {
-		byte[] frameValue = new byte[6];
-		frameValue[0] = 0x0;
-		frameValue[1] = 0x0;
-		frameValue[2] = 0x0;
-		frameValue[3] = sourceAddress;
-		frameValue[4] = 0x0;
-		frameValue[5] = 0x5; //Generate Completed Signal
-		return new STPLPFrame(frameValue);
-	}
-	
 	/**
 	 * Generates a Kill Signal.
 	 * @return A kill signal for the network.
@@ -210,6 +199,19 @@ public class STPLPFrame {
 	}
 	
 	/**
+	 * This method determines if the finished bit is flipped.
+	 * @return True, if the finished bit is not flipped.
+	 */
+	public boolean finishedBit() {
+		byte bitMask = 0x40;
+		byte tmp = (byte) (frameValue[5] & bitMask);
+		//If finished bit is flipped, value will be 0x24
+		if (tmp == 0x40)
+			return false;
+		return true;
+	}
+	
+	/**
 	 * Sets the Monitor Bit to be 1
 	 */
 	public void setMonitorBit() {
@@ -221,6 +223,18 @@ public class STPLPFrame {
 	 */
 	public void zeroMonitorBit() {
 		this.frameValue[0] = (byte) (this.frameValue[0] & 0x0);
+	}
+	
+	/**
+	 * Sets the Finished bit in the Frame Status byte
+	 */
+	public void setFinishedBit() {
+		if (this.getDataSize() != 0) {
+			System.out.println("Cannot set Finished Bits on a non-token frame!");
+			return;
+		}
+		byte bitMask = 0x40;
+		this.frameValue[5] = (byte) (this.frameValue[5] | bitMask);
 	}
 	
 	/**
@@ -294,7 +308,7 @@ public class STPLPFrame {
 	public void generateFrameStatus() {
 		int sizeOfFrame = this.frameValue.length;
 		Random i = new Random();
-		if(i.nextInt(100) < 20) {
+		if(i.nextInt(100) < 0) {
 			//Frame Rejected
 			this.frameValue[sizeOfFrame - 1] = 0x3;
 			return;
@@ -329,8 +343,14 @@ public class STPLPFrame {
 	 */
 	@Override
 	public boolean equals(Object obj) {
+		boolean tmp;
 		STPLPFrame frame = (STPLPFrame) obj;
-		return Arrays.equals(frame.getBinaryData(), this.getBinaryData());
+		tmp = Arrays.equals(frame.getBinaryData(), this.getBinaryData());
+		if (tmp == true) {
+			//System.out.println("Could not find frame!!");
+			return false;
+		}
+		return true;
 	}
 	
 	/**

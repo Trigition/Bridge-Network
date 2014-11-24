@@ -1,9 +1,15 @@
 #Makefile for compiling C++ Code
 
 CC=g++
-CFLAGS=-std=c++11 -Wall -g
+CFLAGS=-std=c++11
 
-all: main
+all: connection main cleanup
 
-main: main.cpp
+main: main.cpp connection.o
 	$(CC) $(CFLAGS) main.cpp -o bridge
+
+connection: connection.h connection.cpp
+	$(CC) $(CFLAGS) -c connection.cpp -o connection.o
+
+cleanup:
+	rm -r *.dSYM
